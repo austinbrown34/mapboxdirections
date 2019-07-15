@@ -189,14 +189,15 @@ open class Directions: NSObject {
 
                     let dis = step["distance"]
 
-                    let osrminstructionFormatter = OSRMInstructionFormatter.init(version: "v5")
+//                    let osrminstructionFormatter = OSRMInstructionFormatter.init(version: "v5")
 
                     let this_step = RouteStep.init(json: step, options: globalOptions!)
 
-                    let instruction = osrminstructionFormatter.string(for: this_step)
+//                    let instruction = osrminstructionFormatter.string(for: this_step)
+                    let instruction = this_step.instructions
 
 
-                    let msg = "<speak><amazon:effect name=\"drc\"><prosody rate=\"1.08\">" + instruction! + "</prosody></amazon:effect></speak>"
+                    let msg = "<speak><amazon:effect name=\"drc\"><prosody rate=\"1.08\">" + instruction + "</prosody></amazon:effect></speak>"
                     voiceObject["distanceAlongGeometry"] = dis
                     voiceObject["announcement"] = instruction
                     voiceObject["ssmlAnnouncement"] = msg
