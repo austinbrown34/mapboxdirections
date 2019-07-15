@@ -16,6 +16,9 @@ var skuToken: String? {
     return mbx.value(forKeyPath: "serviceSkuToken") as? String
 }
 
+var globalOSRMPath: String?
+var globalOptions: RouteOptions?
+
 /// The user agent string for any HTTP requests performed directly within this library.
 let userAgent: String = {
     var components: [String] = []
@@ -143,6 +146,99 @@ open class Directions: NSObject {
         self.init(accessToken: accessToken, host: nil)
     }
 
+    @discardableResult open func getJSONString (jsonResult: Dictionary<String, Any>) -> String{
+
+        var JSONString = "{}"
+        do{
+            let jsonData = try JSONSerialization.data(withJSONObject: jsonResult, options: JSONSerialization.WritingOptions.prettyPrinted)
+            let jsonString = String.init(data: jsonData, encoding: String.Encoding.utf8)
+            JSONString = jsonString!
+        }
+        catch {
+            print(error.localizedDescription)
+        }
+        return JSONString
+
+    }
+
+    @discardableResult open func getJSON(_ start: CLLocationCoordinate2D, end: CLLocationCoordinate2D, osrmPath: String) -> Dictionary<String, Any> {
+
+        let routeService = RouteService.init(mapData: osrmPath)
+
+        routeService?.overview = .full
+        routeService?.geometries = .polyline
+        routeService?.steps = true
+        let jsonResult = routeService?.getRoutesFrom(start, to: end)
+
+        var newroutes = [Dictionary<String, Any>]()
+
+        for r in jsonResult!["routes"] as! [Dictionary<String, Any>]{
+            var route = r
+            route["voiceLocal"] = "en-US"
+            var newlegs = [Dictionary<String, Any>]()
+            for leg in route["legs"] as! [Dictionary<String, Any>]{
+                var newsteps = [Dictionary<String, Any>]()
+                for step in leg["steps"] as! [Dictionary<String, Any>]{
+                    var voiceInstructions = [Dictionary<String, Any>]()
+                    var voiceObject = Dictionary<String, Any>()
+                    var bannerInstructions = [Dictionary<String, Any>]()
+                    var bannerObject = Dictionary<String, Any>()
+                    var primary = Dictionary<String, Any>()
+                    var components = [Dictionary<String, Any>]()
+                    var component = Dictionary<String, Any>()
+
+                    let dis = step["distance"]
+
+                    let osrminstructionFormatter = OSRMInstructionFormatter.init(version: "v5")
+
+                    let this_step = RouteStep.init(json: step, options: globalOptions!)
+
+                    let instruction = osrminstructionFormatter.string(for: this_step)
+
+
+                    let msg = "<speak><amazon:effect name=\"drc\"><prosody rate=\"1.08\">" + instruction! + "</prosody></amazon:effect></speak>"
+                    voiceObject["distanceAlongGeometry"] = dis
+                    voiceObject["announcement"] = instruction
+                    voiceObject["ssmlAnnouncement"] = msg
+                    voiceInstructions.append(voiceObject)
+
+                    var newstep = step
+
+                    var maneuver = newstep["maneuver"] as! Dictionary<String, Any>
+                    maneuver["instruction"] = instruction
+                    component["text"] = step["name"]
+                    component["type"] = "text"
+                    component["abbr"] = step["name"]
+                    component["abbr_priority"] = 0
+                    components.append(component)
+                    primary["text"] = step["name"]
+                    primary["components"] = components
+                    primary["type"] = maneuver["type"]
+                    primary["modifier"] = maneuver["modifier"]
+                    bannerObject["distanceAlongGeometry"] = dis
+                    bannerObject["primary"] = primary
+                    bannerObject["secondary"] = nil
+                    bannerInstructions.append(bannerObject)
+
+                    newstep["maneuver"] = maneuver
+                    newstep["bannerInstructions"] = bannerInstructions
+                    newstep["voiceInstructions"] = voiceInstructions
+                    newsteps.append(newstep)
+
+                }
+                var newleg = leg
+                newleg["steps"] = newsteps
+                newlegs.append(newleg)
+            }
+            route["legs"] = newlegs
+            newroutes.append(route)
+        }
+        var newjsonResult = jsonResult
+        newjsonResult!["routes"] = newroutes as NSObject
+
+        return newjsonResult!
+    }
+
     // MARK: Getting Directions
 
     /**
@@ -156,9 +252,15 @@ open class Directions: NSObject {
      - parameter completionHandler: The closure (block) to call with the resulting routes. This closure is executed on the application’s main thread.
      - returns: The data task used to perform the HTTP request. If, while waiting for the completion handler to execute, you no longer want the resulting routes, cancel this task.
      */
-    @objc(calculateDirectionsWithOptions:completionHandler:)
-    @discardableResult open func calculate(_ options: RouteOptions, completionHandler: @escaping RouteCompletionHandler) -> URLSessionDataTask {
+    @objc(calculateDirectionsWithOptions:osrmPath:completionHandler:)
+    @discardableResult open func calculate(_ options: RouteOptions, osrmPath: String? = nil, completionHandler: @escaping RouteCompletionHandler) -> URLSessionDataTask {
         let fetchStartDate = Date()
+        if globalOptions == nil{
+            globalOptions = options
+        }
+        if globalOSRMPath == nil{
+            globalOSRMPath = osrmPath
+        }
         let task = dataTask(forCalculating: options, completionHandler: { (json) in
             let responseEndDate = Date()
             let response = options.response(from: json)
