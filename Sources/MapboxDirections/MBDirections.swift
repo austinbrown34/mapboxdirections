@@ -317,14 +317,50 @@ open class Directions: NSObject {
             }
         }) { (error) in
             if globalOSRMPath == nil{
-                completionHandler(nil, nil, error)
+                completionHandler(response.0, response.1, nil)
             }
             else{
                 let start = options.waypoints[0].coordinate
                 let end = options.waypoints[1].coordinate
                 let jsonResult = self.getJSON(start, end: end, osrmPath: globalOSRMPath!)
-                let routes = jsonResult["routes"] as! [Route]
-                completionHandler(options.waypoints, routes, nil)
+
+                let JSONString = self.getJSONString(jsonResult: jsonResult)
+                print(JSONString)
+                var json: JSONDictionary = [:]
+
+//                    do {
+////                        json = try JSONSerialization.jsonObject(with: , options: []) as! JSONDictionary
+//                        json = try JSONSerialization.jsonObject(with: JSONString, options: <#T##JSONSerialization.ReadingOptions#>)
+//                    } catch {
+//                        assert(false, "Invalid data")
+//                    }
+                do{
+                    let jsonData = try JSONSerialization.data(withJSONObject: jsonResult, options: JSONSerialization.WritingOptions.prettyPrinted)
+                    json = try JSONSerialization.jsonObject(with: jsonData, options: []) as! JSONDictionary
+                    let internalResponse = options.response(from: json)
+                    if let routes = internalResponse.1 {
+                        for route in routes {
+                            route.accessToken = self.accessToken
+                            route.apiEndpoint = self.apiEndpoint
+                            route.routeIdentifier = json["uuid"] as? String
+                        }
+                    }
+                    print("internalResponse0:")
+                    print(internalResponse.0)
+                    print("internalResponse1:")
+                    print(internalResponse.1)
+                    completionHandler(internalResponse.0, internalResponse.1, nil)
+
+                }
+                catch {
+                    print(error.localizedDescription)
+                    completionHandler(nil, nil, nil)
+                }
+
+
+//                NSArray<MBRoute *> * _Nullable routes = [jsonResult valueForKeyPath:@"routes"];
+//                let routes = jsonResult["routes"] as! [Route]
+//                completionHandler(options.waypoints, routes, nil)
             }
             // completionHandler(nil, nil, error)
         }
