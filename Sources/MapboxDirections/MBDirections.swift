@@ -316,7 +316,17 @@ open class Directions: NSObject {
 //                completionHandler(options.waypoints, routes, nil)
             }
         }) { (error) in
-            completionHandler(nil, nil, error)
+            if globalOSRMPath == nil{
+                completionHandler(nil, nil, error)
+            }
+            else{
+                let start = options.waypoints[0].coordinate
+                let end = options.waypoints[1].coordinate
+                let jsonResult = self.getJSON(start, end: end, osrmPath: globalOSRMPath!)
+                let routes = jsonResult["routes"] as! [Route]
+                completionHandler(options.waypoints, routes, nil)
+            }
+            // completionHandler(nil, nil, error)
         }
         task.resume()
         return task
