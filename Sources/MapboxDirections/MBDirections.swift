@@ -317,7 +317,7 @@ open class Directions: NSObject {
             }
         }) { (error) in
             if globalOSRMPath == nil{
-                completionHandler(response.0, response.1, nil)
+                completionHandler(nil, nil, nil)
             }
             else{
                 let start = options.waypoints[0].coordinate
