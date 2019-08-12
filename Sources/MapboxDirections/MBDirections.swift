@@ -22,108 +22,108 @@ var globalOptions: RouteOptions?
 /// The user agent string for any HTTP requests performed directly within this library.
 let userAgent: String = {
     var components: [String] = []
-
+    
     if let appName = Bundle.main.infoDictionary?["CFBundleName"] as? String ?? Bundle.main.infoDictionary?["CFBundleIdentifier"] as? String {
         let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? ""
         components.append("\(appName)/\(version)")
     }
-
+    
     let libraryBundle: Bundle? = Bundle(for: Directions.self)
-
+    
     if let libraryName = libraryBundle?.infoDictionary?["CFBundleName"] as? String, let version = libraryBundle?.infoDictionary?["CFBundleShortVersionString"] as? String {
         components.append("\(libraryName)/\(version)")
     }
-
+    
     let system: String
     #if os(OSX)
-        system = "macOS"
+    system = "macOS"
     #elseif os(iOS)
-        system = "iOS"
+    system = "iOS"
     #elseif os(watchOS)
-        system = "watchOS"
+    system = "watchOS"
     #elseif os(tvOS)
-        system = "tvOS"
+    system = "tvOS"
     #elseif os(Linux)
-        system = "Linux"
+    system = "Linux"
     #endif
     let systemVersion = ProcessInfo().operatingSystemVersion
     components.append("\(system)/\(systemVersion.majorVersion).\(systemVersion.minorVersion).\(systemVersion.patchVersion)")
-
+    
     let chip: String
     #if arch(x86_64)
-        chip = "x86_64"
+    chip = "x86_64"
     #elseif arch(arm)
-        chip = "arm"
+    chip = "arm"
     #elseif arch(arm64)
-        chip = "arm64"
+    chip = "arm64"
     #elseif arch(i386)
-        chip = "i386"
+    chip = "i386"
     #endif
     components.append("(\(chip))")
-
+    
     return components.joined(separator: " ")
 }()
 
 /**
  A `Directions` object provides you with optimal directions between different locations, or waypoints. The directions object passes your request to the [Mapbox Directions API](https://docs.mapbox.com/api/navigation/#directions) and returns the requested information to a closure (block) that you provide. A directions object can handle multiple simultaneous requests. A `RouteOptions` object specifies criteria for the results, such as intermediate waypoints, a mode of transportation, or the level of detail to be returned.
-
+ 
  Each result produced by the directions object is stored in a `Route` object. Depending on the `RouteOptions` object you provide, each route may include detailed information suitable for turn-by-turn directions, or it may include only high-level information such as the distance, estimated travel time, and name of each leg of the trip. The waypoints that form the request may be conflated with nearby locations, as appropriate; the resulting waypoints are provided to the closure.
  */
 @objc(MBDirections)
 open class Directions: NSObject {
     /**
      A closure (block) to be called when a directions request is complete.
-
+     
      - parameter waypoints: An array of `Waypoint` objects. Each waypoint object corresponds to a `Waypoint` object in the original `RouteOptions` object. The locations and names of these waypoints are the result of conflating the original waypoints to known roads. The waypoints may include additional information that was not specified in the original waypoints.
-
-        If the request was canceled or there was an error obtaining the routes, this parameter may be `nil`.
+     
+     If the request was canceled or there was an error obtaining the routes, this parameter may be `nil`.
      - parameter routes: An array of `Route` objects. The preferred route is first; any alternative routes come next if the `RouteOptions` object’s `includesAlternativeRoutes` property was set to `true`. The preferred route depends on the route options object’s `profileIdentifier` property.
-
-        If the request was canceled or there was an error obtaining the routes, this parameter is `nil`. This is not to be confused with the situation in which no results were found, in which case the array is present but empty.
+     
+     If the request was canceled or there was an error obtaining the routes, this parameter is `nil`. This is not to be confused with the situation in which no results were found, in which case the array is present but empty.
      - parameter error: The error that occurred, or `nil` if the placemarks were obtained successfully.
      */
     public typealias RouteCompletionHandler = (_ waypoints: [Waypoint]?, _ routes: [Route]?, _ error: NSError?) -> Void
-
+    
     /**
      A closure (block) to be called when a map matching request is complete.
-
+     
      If the request was canceled or there was an error obtaining the matches, this parameter is `nil`. This is not to be confused with the situation in which no matches were found, in which case the array is present but empty.
      - parameter error: The error that occurred, or `nil` if the placemarks were obtained successfully.
      */
     public typealias MatchCompletionHandler = (_ matches: [Match]?, _ error: NSError?) -> Void
-
+    
     // MARK: Creating a Directions Object
-
+    
     /**
      The shared directions object.
-
+     
      To use this object, a Mapbox [access token](https://docs.mapbox.com/help/glossary/access-token/) should be specified in the `MGLMapboxAccessToken` key in the main application bundle’s Info.plist.
      */
     @objc(sharedDirections)
     public static let shared = Directions(accessToken: nil)
-
+    
     /**
      The API endpoint to use when requesting directions.
      */
     @objc public private(set) var apiEndpoint: URL
-
+    
     /**
      The Mapbox access token to associate with the request.
      */
     @objc public let accessToken: String
-
+    
     /**
      Initializes a newly created directions object with an optional access token and host.
-
+     
      - parameter accessToken: A Mapbox [access token](https://docs.mapbox.com/help/glossary/access-token/). If an access token is not specified when initializing the directions object, it should be specified in the `MGLMapboxAccessToken` key in the main application bundle’s Info.plist.
      - parameter host: An optional hostname to the server API. The [Mapbox Directions API](https://docs.mapbox.com/api/navigation/#directions) endpoint is used by default.
      */
     @objc public init(accessToken: String?, host: String?) {
         let accessToken = accessToken ?? defaultAccessToken
         assert(accessToken != nil && !accessToken!.isEmpty, "A Mapbox access token is required. Go to <https://account.mapbox.com/access-tokens/>. In Info.plist, set the MGLMapboxAccessToken key to your access token, or use the Directions(accessToken:host:) initializer.")
-
+        
         self.accessToken = accessToken!
-
+        
         if let host = host, !host.isEmpty {
             var baseURLComponents = URLComponents()
             baseURLComponents.scheme = "https"
@@ -132,22 +132,22 @@ open class Directions: NSObject {
         } else {
             apiEndpoint = URL(string:(defaultApiEndPointURLString ?? "https://api.mapbox.com"))!
         }
-
+        
     }
-
+    
     /**
      Initializes a newly created directions object with an optional access token.
-
+     
      The directions object sends requests to the [Mapbox Directions API](https://docs.mapbox.com/api/navigation/#directions) endpoint.
-
+     
      - parameter accessToken: A Mapbox [access token](https://docs.mapbox.com/help/glossary/access-token/). If an access token is not specified when initializing the directions object, it should be specified in the `MGLMapboxAccessToken` key in the main application bundle’s Info.plist.
      */
     @objc public convenience init(accessToken: String?) {
         self.init(accessToken: accessToken, host: nil)
     }
-
+    
     @discardableResult open func getJSONString (jsonResult: Dictionary<String, Any>) -> String{
-
+        
         var JSONString = "{}"
         do{
             let jsonData = try JSONSerialization.data(withJSONObject: jsonResult, options: JSONSerialization.WritingOptions.prettyPrinted)
@@ -158,20 +158,20 @@ open class Directions: NSObject {
             print(error.localizedDescription)
         }
         return JSONString
-
+        
     }
-
+    
     @discardableResult open func getJSON(_ start: CLLocationCoordinate2D, end: CLLocationCoordinate2D, osrmPath: String) -> Dictionary<String, Any> {
-
+        
         let routeService = RouteService.init(mapData: osrmPath)
-
+        
         routeService?.overview = .full
         routeService?.geometries = .polyline6
         routeService?.steps = true
         let jsonResult = routeService?.getRoutesFrom(start, to: end)
-
+        
         var newroutes = [Dictionary<String, Any>]()
-
+        
         for r in jsonResult!["routes"] as! [Dictionary<String, Any>]{
             var route = r
             route["voiceLocal"] = "en-US"
@@ -186,25 +186,25 @@ open class Directions: NSObject {
                     var primary = Dictionary<String, Any>()
                     var components = [Dictionary<String, Any>]()
                     var component = Dictionary<String, Any>()
-
+                    
                     let dis = step["distance"]
-
-//                    let osrminstructionFormatter = OSRMInstructionFormatter.init(version: "v5")
-
+                    
+                    //                    let osrminstructionFormatter = OSRMInstructionFormatter.init(version: "v5")
+                    
                     let this_step = RouteStep.init(json: step, options: globalOptions!)
-
-//                    let instruction = osrminstructionFormatter.string(for: this_step)
+                    
+                    //                    let instruction = osrminstructionFormatter.string(for: this_step)
                     let instruction = this_step.instructions
-
-
+                    
+                    
                     let msg = "<speak><amazon:effect name=\"drc\"><prosody rate=\"1.08\">" + instruction + "</prosody></amazon:effect></speak>"
                     voiceObject["distanceAlongGeometry"] = dis
                     voiceObject["announcement"] = instruction
                     voiceObject["ssmlAnnouncement"] = msg
                     voiceInstructions.append(voiceObject)
-
+                    
                     var newstep = step
-
+                    
                     var maneuver = newstep["maneuver"] as! Dictionary<String, Any>
                     maneuver["instruction"] = instruction
                     component["text"] = step["name"]
@@ -220,12 +220,12 @@ open class Directions: NSObject {
                     bannerObject["primary"] = primary
                     bannerObject["secondary"] = nil
                     bannerInstructions.append(bannerObject)
-
+                    
                     newstep["maneuver"] = maneuver
                     newstep["bannerInstructions"] = bannerInstructions
                     newstep["voiceInstructions"] = voiceInstructions
                     newsteps.append(newstep)
-
+                    
                 }
                 var newleg = leg
                 newleg["steps"] = newsteps
@@ -236,19 +236,19 @@ open class Directions: NSObject {
         }
         var newjsonResult = jsonResult
         newjsonResult!["routes"] = newroutes as NSObject
-
+        
         return newjsonResult!
     }
-
+    
     // MARK: Getting Directions
-
+    
     /**
      Begins asynchronously calculating routes using the given options and delivers the results to a closure.
-
+     
      This method retrieves the routes asynchronously from the [Mapbox Directions API](https://www.mapbox.com/api-documentation/navigation/#directions) over a network connection. If a connection error or server error occurs, details about the error are passed into the given completion handler in lieu of the routes.
-
+     
      Routes may be displayed atop a [Mapbox map](https://www.mapbox.com/maps/). They may be cached but may not be stored permanently. To use the results in other contexts or store them permanently, [upgrade to a Mapbox enterprise plan](https://www.mapbox.com/navigation/#pricing).
-
+     
      - parameter options: A `RouteOptions` object specifying the requirements for the resulting routes.
      - parameter completionHandler: The closure (block) to call with the resulting routes. This closure is executed on the application’s main thread.
      - returns: The data task used to perform the HTTP request. If, while waiting for the completion handler to execute, you no longer want the resulting routes, cancel this task.
@@ -268,53 +268,8 @@ open class Directions: NSObject {
             if let routes = response.1 {
                 self.postprocess(routes, fetchStartDate: fetchStartDate, responseEndDate: responseEndDate, uuid: json["uuid"] as? String)
             }
-            // completionHandler(response.0, response.1, nil)
-            if globalOSRMPath == nil{
-                completionHandler(response.0, response.1, nil)
-            }
-            else{
-                let start = options.waypoints[0].coordinate
-                let end = options.waypoints[1].coordinate
-                let jsonResult = self.getJSON(start, end: end, osrmPath: globalOSRMPath!)
-
-                let JSONString = self.getJSONString(jsonResult: jsonResult)
-                print(JSONString)
-                var json: JSONDictionary = [:]
-
-//                    do {
-////                        json = try JSONSerialization.jsonObject(with: , options: []) as! JSONDictionary
-//                        json = try JSONSerialization.jsonObject(with: JSONString, options: <#T##JSONSerialization.ReadingOptions#>)
-//                    } catch {
-//                        assert(false, "Invalid data")
-//                    }
-                do{
-                    let jsonData = try JSONSerialization.data(withJSONObject: jsonResult, options: JSONSerialization.WritingOptions.prettyPrinted)
-                    json = try JSONSerialization.jsonObject(with: jsonData, options: []) as! JSONDictionary
-                    let internalResponse = options.response(from: json)
-                    if let routes = internalResponse.1 {
-                        for route in routes {
-                            route.accessToken = self.accessToken
-                            route.apiEndpoint = self.apiEndpoint
-                            route.routeIdentifier = json["uuid"] as? String
-                        }
-                    }
-                    print("internalResponse0:")
-                    print(internalResponse.0)
-                    print("internalResponse1:")
-                    print(internalResponse.1)
-                    completionHandler(internalResponse.0, internalResponse.1, nil)
-
-                }
-                catch {
-                    print(error.localizedDescription)
-                    completionHandler(nil, nil, nil)
-                }
-
-
-//                NSArray<MBRoute *> * _Nullable routes = [jsonResult valueForKeyPath:@"routes"];
-//                let routes = jsonResult["routes"] as! [Route]
-//                completionHandler(options.waypoints, routes, nil)
-            }
+            completionHandler(response.0, response.1, nil)
+            
         }) { (error) in
             if globalOSRMPath == nil{
                 completionHandler(nil, nil, nil)
@@ -323,17 +278,17 @@ open class Directions: NSObject {
                 let start = options.waypoints[0].coordinate
                 let end = options.waypoints[1].coordinate
                 let jsonResult = self.getJSON(start, end: end, osrmPath: globalOSRMPath!)
-
+                
                 let JSONString = self.getJSONString(jsonResult: jsonResult)
                 print(JSONString)
                 var json: JSONDictionary = [:]
-
-//                    do {
-////                        json = try JSONSerialization.jsonObject(with: , options: []) as! JSONDictionary
-//                        json = try JSONSerialization.jsonObject(with: JSONString, options: <#T##JSONSerialization.ReadingOptions#>)
-//                    } catch {
-//                        assert(false, "Invalid data")
-//                    }
+                
+                //                    do {
+                ////                        json = try JSONSerialization.jsonObject(with: , options: []) as! JSONDictionary
+                //                        json = try JSONSerialization.jsonObject(with: JSONString, options: <#T##JSONSerialization.ReadingOptions#>)
+                //                    } catch {
+                //                        assert(false, "Invalid data")
+                //                    }
                 do{
                     let jsonData = try JSONSerialization.data(withJSONObject: jsonResult, options: JSONSerialization.WritingOptions.prettyPrinted)
                     json = try JSONSerialization.jsonObject(with: jsonData, options: []) as! JSONDictionary
@@ -350,31 +305,31 @@ open class Directions: NSObject {
                     print("internalResponse1:")
                     print(internalResponse.1)
                     completionHandler(internalResponse.0, internalResponse.1, nil)
-
+                    
                 }
                 catch {
                     print(error.localizedDescription)
                     completionHandler(nil, nil, nil)
                 }
-
-
-//                NSArray<MBRoute *> * _Nullable routes = [jsonResult valueForKeyPath:@"routes"];
-//                let routes = jsonResult["routes"] as! [Route]
-//                completionHandler(options.waypoints, routes, nil)
+                
+                
+                //                NSArray<MBRoute *> * _Nullable routes = [jsonResult valueForKeyPath:@"routes"];
+                //                let routes = jsonResult["routes"] as! [Route]
+                //                completionHandler(options.waypoints, routes, nil)
             }
             // completionHandler(nil, nil, error)
         }
         task.resume()
         return task
     }
-
+    
     /**
      Begins asynchronously calculating matches using the given options and delivers the results to a closure.
-
+     
      This method retrieves the matches asynchronously from the [Mapbox Map Matching API](https://docs.mapbox.com/api/navigation/#map-matching) over a network connection. If a connection error or server error occurs, details about the error are passed into the given completion handler in lieu of the routes.
-
+     
      To get `Route`s based on these matches, use the `calculateRoutes(matching:completionHandler:)` method instead.
-
+     
      - parameter options: A `MatchOptions` object specifying the requirements for the resulting matches.
      - parameter completionHandler: The closure (block) to call with the resulting matches. This closure is executed on the application’s main thread.
      - returns: The data task used to perform the HTTP request. If, while waiting for the completion handler to execute, you no longer want the resulting matches, cancel this task.
@@ -395,14 +350,14 @@ open class Directions: NSObject {
         task.resume()
         return task
     }
-
+    
     /**
      Begins asynchronously calculating routes that match the given options and delivers the results to a closure.
-
+     
      This method retrieves the routes asynchronously from the [Mapbox Map Matching API](https://docs.mapbox.com/api/navigation/#map-matching) over a network connection. If a connection error or server error occurs, details about the error are passed into the given completion handler in lieu of the routes.
-
+     
      To get the `Match`es that these routes are based on, use the `calculate(_:completionHandler:)` method instead.
-
+     
      - parameter options: A `MatchOptions` object specifying the requirements for the resulting match.
      - parameter completionHandler: The closure (block) to call with the resulting routes. This closure is executed on the application’s main thread.
      - returns: The data task used to perform the HTTP request. If, while waiting for the completion handler to execute, you no longer want the resulting routes, cancel this task.
@@ -423,10 +378,10 @@ open class Directions: NSObject {
         task.resume()
         return task
     }
-
+    
     /**
      Returns a URL session task for calculating routes based on the given options that will run the given closures on completion or error.
-
+     
      - parameter options: A `DirectionsOptions` object specifying the requirements for the resulting routes.
      - parameter completionHandler: The closure to call with the parsed JSON response dictionary.
      - parameter errorHandler: The closure to call when there is an error.
@@ -444,7 +399,7 @@ open class Directions: NSObject {
                     assert(false, "Invalid data")
                 }
             }
-
+            
             let apiStatusCode = json["code"] as? String
             let apiMessage = json["message"] as? String
             guard !json.isEmpty, data != nil, error == nil && ((apiStatusCode == nil && apiMessage == nil) || apiStatusCode == "Ok") else {
@@ -454,18 +409,18 @@ open class Directions: NSObject {
                 }
                 return
             }
-
+            
             DispatchQueue.main.async {
                 completionHandler(json)
             }
         }
     }
-
+    
     /**
      The GET HTTP URL used to fetch the routes from the API.
-
+     
      After requesting the URL returned by this method, you can parse the JSON data in the response and pass it into the `Route.init(json:waypoints:profileIdentifier:)` initializer. Alternatively, you can use the `calculate(_:options:)` method, which automatically sends the request and parses the response.
-
+     
      - parameter options: A `DirectionsOptions` object specifying the requirements for the resulting routes.
      - returns: The URL to send the request to.
      */
@@ -473,14 +428,14 @@ open class Directions: NSObject {
     open func url(forCalculating options: DirectionsOptions) -> URL {
         return url(forCalculating: options, httpMethod: "GET")
     }
-
+    
     /**
      The HTTP URL used to fetch the routes from the API using the specified HTTP method.
-
+     
      The query part of the URL is generally suitable for GET requests. However, if the URL is exceptionally long, it may be more appropriate to send a POST request to a URL without the query part, relegating the query to the body of the HTTP request. Use the `urlRequest(forCalculating:)` method to get an HTTP request that is a GET or POST request as necessary.
-
+     
      After requesting the URL returned by this method, you can parse the JSON data in the response and pass it into the `Route.init(json:waypoints:profileIdentifier:)` initializer. Alternatively, you can use the `calculate(_:options:)` method, which automatically sends the request and parses the response.
-
+     
      - parameter options: A `DirectionsOptions` object specifying the requirements for the resulting routes.
      - parameter httpMethod: The HTTP method to use. The value of this argument should match the `URLRequest.httpMethod` of the request you send. Currently, only GET and POST requests are supported by the API.
      - returns: The URL to send the request to.
@@ -490,24 +445,24 @@ open class Directions: NSObject {
         let includesQuery = httpMethod != "POST"
         var params = (includesQuery ? options.urlQueryItems : [])
         params += [URLQueryItem(name: "access_token", value: accessToken)]
-
+        
         if let skuToken = skuToken {
             params += [URLQueryItem(name: "sku", value: skuToken)]
         }
-
+        
         let unparameterizedURL = URL(string: includesQuery ? options.path : options.abridgedPath, relativeTo: apiEndpoint)!
         var components = URLComponents(url: unparameterizedURL, resolvingAgainstBaseURL: true)!
         components.queryItems = params
         return components.url!
     }
-
+    
     /**
      The HTTP request used to fetch the routes from the API.
-
+     
      The returned request is a GET or POST request as necessary to accommodate URL length limits.
-
+     
      After sending the request returned by this method, you can parse the JSON data in the response and pass it into the `Route.init(json:waypoints:profileIdentifier:)` initializer. Alternatively, you can use the `calculate(_:options:)` method, which automatically sends the request and parses the response.
-
+     
      - parameter options: A `DirectionsOptions` object specifying the requirements for the resulting routes.
      - returns: A GET or POST HTTP request to calculate the specified options.
      */
@@ -517,7 +472,7 @@ open class Directions: NSObject {
         var request = URLRequest(url: getURL)
         if getURL.absoluteString.count > MaximumURLLength {
             request.url = url(forCalculating: options, httpMethod: "POST")
-
+            
             let body = options.httpBody.data(using: .utf8)
             request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
             request.httpMethod = "POST"
@@ -526,7 +481,7 @@ open class Directions: NSObject {
         request.setValue(userAgent, forHTTPHeaderField: "User-Agent")
         return request
     }
-
+    
     /**
      Returns an error that supplements the given underlying error with additional information from the an HTTP response’s body or headers.
      */
@@ -546,11 +501,11 @@ open class Directions: NSObject {
             case (404, "ProfileNotFound"):
                 failureReason = "Unrecognized profile identifier."
                 recoverySuggestion = "Make sure the profileIdentifier option is set to one of the provided constants, such as MBDirectionsProfileIdentifierAutomobile."
-
+                
             case (413, _):
                 failureReason = "The request is too large."
                 recoverySuggestion = "Try specifying fewer waypoints or giving the waypoints shorter names."
-
+                
             case (429, _):
                 if let timeInterval = response.rateLimitInterval, let maximumCountOfRequests = response.rateLimit {
                     let intervalFormatter = DateComponentsFormatter()
@@ -575,7 +530,7 @@ open class Directions: NSObject {
         }
         return NSError(domain: error?.domain ?? MBDirectionsErrorDomain, code: error?.code ?? -1, userInfo: userInfo)
     }
-
+    
     /**
      Adds request- or response-specific information to each result in a response.
      */
